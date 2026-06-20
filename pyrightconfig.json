@@ -1,0 +1,18 @@
+{
+  "include": [
+    "backend",
+    "frontend"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "backend/.venv",
+    "frontend/dist",
+    ".opencode"
+  ],
+  "extraPaths": [
+    "."
+  ],
+  "venvPath": "backend",
+  "venv": ".venv"
+}
