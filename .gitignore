@@ -11,4 +11,8 @@ dist/
 backend/.env
 frontend/.env
 .DS_Store
-.opencode/
+.opencode/*
+!.opencode/skills/
+.opencode/skills/*
+!.opencode/skills/project-memory/
+!.opencode/skills/project-memory/**
