@@ -1,31 +1,36 @@
-# lingzhi
+# VibeChat
 
-一个为比赛前准备的全栈通用底座：
+AI 驱动的情绪社交 Web 应用。用户输入一段当前状态，系统分析情绪后，将其送入同频匿名房间，并进入一段轻量匿名对话。
+
+## 当前技术栈
 
 - 后端：FastAPI
-- 前端：Vue 3 + Vite
+- 前端：Next.js 14
 - 数据库：PostgreSQL
-- 容器：Docker Compose
+- 本地数据库运行方式：Docker Compose
+- LLM 适配：OpenAI 兼容接口 / Anthropic / mock
 
-这个仓库刻意保持“题目无关”的通用结构，方便你在真正比赛题目公布后，快速把 `Item`、页面文案和字段替换成新业务。
+## 当前产品主链路
 
-默认数据库方案是：**使用 Docker 启动 PostgreSQL**，并把宿主机端口映射到 `5433`，尽量避开你电脑里已经存在的本地 PostgreSQL/pgvector 冲突。
+1. 用户输入一句当前心情或状态
+2. 后端调用 LLM 分析情绪
+3. 系统将用户分配到同频情绪房间
+4. 用户以匿名昵称进入房间聊天
+5. 若房间暂时无人，也能通过破冰提示与单人等待模式稳定演示
 
 ## 目录结构
 
 ```text
 .
-├─ backend/     FastAPI + SQLAlchemy 后端
-├─ frontend/    Vue 3 + Vite 前端
+├─ backend/     FastAPI 后端
+├─ frontend/    Next.js 前端
 ├─ docker-compose.yml
 └─ .env.example
 ```
 
 ## 快速开始
 
-### 1. 启动 PostgreSQL
-
-先复制环境变量：
+### 1. 复制环境变量
 
 ```bash
 copy .env.example .env
@@ -33,13 +38,15 @@ copy backend\.env.example backend\.env
 copy frontend\.env.example frontend\.env
 ```
 
-然后只启动 Docker 里的 PostgreSQL：
+### 2. 启动 PostgreSQL
 
 ```bash
 docker compose up -d db
 ```
 
-### 2. 启动后端
+默认使用宿主机端口 `5433`，尽量避开本机已有 PostgreSQL 冲突。
+
+### 3. 启动后端
 
 ```bash
 cd backend
@@ -47,14 +54,12 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 set PYTHONPATH=..
-uvicorn backend.app.main:app --reload
+python -m uvicorn backend.app.main:app --reload
 ```
 
-后端默认地址：`http://localhost:8000`
+后端地址：`http://localhost:8000`
 
-后端默认连接的数据库地址是：`postgresql+psycopg://postgres:postgres@localhost:5433/lingzhi_app`
-
-### 3. 启动前端
+### 4. 启动前端
 
 ```bash
 cd frontend
@@ -62,93 +67,132 @@ npm install
 npm run dev
 ```
 
-前端默认地址：`http://localhost:5173`
+前端地址：`http://localhost:3000`
 
-### 4. 完整容器方式启动（可演示）
-
-如果你想一次把数据库、后端、前端都拉起来，请在**仓库根目录**执行：
+### 5. 一次性容器启动（可选）
 
 ```bash
 docker compose up --build
 ```
 
-其中：
+服务地址：
 
 - PostgreSQL：`localhost:5433`
 - FastAPI：`http://localhost:8000`
-- Vue：`http://localhost:5173`
+- Next.js：`http://localhost:3000`
 
-> 推荐你平时开发时优先用“数据库走 Docker、前后端走本机”的方式，排错更直接；演示或交付时再使用 `docker compose up --build` 全量拉起。
+## 当前后端接口
 
-## 默认接口
+### 基础接口
 
-- `GET /api/health`：服务健康检查
-- `GET /api/meta`：返回应用和数据库状态
-- `GET /api/items`：查询 starter 数据
-- `POST /api/items`：新增 starter 数据
-- `POST /api/image/generate`：代理调用生图模型（API Key 仅保存在 `backend/.env`）
+- `GET /api/health`：健康检查
+- `GET /api/meta`：应用与数据库状态
 
-## 生图模型预留配置
+### VibeChat 主链路接口
 
-如果你后面要接入字节/火山引擎这类生图模型，现在已经预留了后端代理接口。你只需要在 `backend/.env` 中填写：
+- `POST /api/analyze`：分析情绪
+- `POST /api/match`：分配同频房间
+- `GET /api/rooms/{room_id}`：获取房间状态
+- `GET /api/rooms/{room_id}/messages`：获取房间历史消息
+- `POST /api/rooms/{room_id}/messages`：发送消息
+- `WS /api/rooms/{room_id}/ws`：房间实时消息
+
+## LLM 配置方式
+
+### 统一切换变量
+
+在 `backend/.env` 中使用：
 
 ```env
-IMAGE_API_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
-IMAGE_API_KEY=你的真实密钥
-IMAGE_MODEL=doubao-seedream-5-0-260128
-IMAGE_DEFAULT_SIZE=2K
-IMAGE_WATERMARK=true
+LLM_PROVIDER=openai
 ```
 
-然后调用：
+可选值：
 
-```http
-POST /api/image/generate
+- `openai`
+- `anthropic`
+- `mock`
+
+### OpenAI 兼容接口模式（当前默认接老张 API）
+
+```env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=你的老张 API Key
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=https://api.laozhang.ai/v1
 ```
 
-请求体示例：
+说明：
 
-```json
-{
-  "prompt": "A cinematic fantasy scene with layered lighting.",
-  "size": "2K",
-  "watermark": true
-}
+- 当前项目默认通过 `openai` provider 接入 **OpenAI 兼容协议**
+- 你现在可直接使用老张 API 提供的 `gpt-4o-mini`
+- 如果后续要切回官方 OpenAI，只需要把 `OPENAI_BASE_URL` 改回 `https://api.openai.com/v1`
+
+### Anthropic 标准接口模式
+
+```env
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=你的 Anthropic Key
+ANTHROPIC_MODEL=claude-3-5-sonnet-latest
 ```
 
-这样做的好处是：前端永远不直接暴露第三方生图 Key，后续你只需要改页面和 prompt 生成逻辑。
+### Mock 兜底模式（推荐演示备用）
 
-## 比赛时如何快速改造
-
-最常见的做法是：
-
-1. 把 `Item` 改成比赛题目的核心实体
-2. 给 `Item` 增减字段
-3. 调整前端表单和列表页面
-4. 替换首页文案、配色和展示逻辑
-5. 继续复用现成的数据库连接、接口组织和状态页
-
-## 当前底座特性
-
-这个 starter 现在是完全通用的，不绑定任何旧赛题，默认包含：
-
-- Docker PostgreSQL 数据持久化
-- FastAPI 后端健康检查 / 元信息 / starter CRUD
-- Vue 前端状态面板与 starter item 录入
-- 前后端环境变量分离
-- 可直接继续扩展成任意比赛题目的业务模型
-
-## 连接 GitHub
-
-如果本地还没初始化仓库，可以执行：
-
-```bash
-git init
-git branch -M main
-git remote add origin https://github.com/wenjinlin66-max/lingzhi.git
-git add .
-git commit -m "chore: scaffold competition starter"
-git push -u origin main
+```env
+LLM_PROVIDER=mock
 ```
 
-如果已经初始化过仓库，只需要补 remote 并 push。
+特点：
+
+- 不依赖外部 API
+- 可稳定输出结构化情绪结果
+- 适合作为现场降级演示模式
+
+## 前端环境变量
+
+在 `frontend/.env` 中配置：
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
+## 当前演示兜底策略
+
+聊天是最容易翻车的部分，所以当前版本预设了三层兜底：
+
+1. **单开两个浏览器窗口**，模拟两个匿名用户
+2. **房间允许单人进入**，即使暂无匹配对象也能继续体验
+3. **AI 破冰建议** 在无人进入时仍能支撑聊天页氛围
+
+注意：
+
+- AI 破冰建议只是暖场和兜底，不替代匿名社交主体验
+- 如果外部 LLM 出错，建议切到 `mock` 模式继续演示
+
+## 当前 LLM 默认值
+
+后端当前已经切到：
+
+```env
+LLM_PROVIDER=openai
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=https://api.laozhang.ai/v1
+```
+
+图片生成功能已从主应用入口移除，不再属于当前比赛项目主链路。
+
+## 当前比赛策略
+
+- 对外讲“相似度驱动匹配”
+- 对内第一版先实现“房间制情绪匹配”
+- 优先保证：能运行、能演示、能讲清楚
+- 优先完成：情绪输入 → 情绪分析 → 房间匹配 → 匿名聊天闭环
+
+## 提交材料提醒
+
+比赛最终提交时至少需要：
+
+1. GitHub 仓库链接
+2. 3～6 分钟完整演示视频
+3. 100 字以内产品介绍
+4. 线上演示地址
